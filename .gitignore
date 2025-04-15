@@ -1,0 +1,33 @@
+.DS_Store
+node_modules
+/dist
+/.history
+draft
+coverage
+/release/dist
+/release/constant
+/release/server.js
+/release/app-version.js
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+yarn.lock
+# package-lock.json
+
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+package-lock.json
+app-version.js
+pnpm-lock.yaml
+# 产物分析文件
+bundle-client-analyze.html
