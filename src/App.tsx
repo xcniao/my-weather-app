@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type { FC } from 'react';
 import axios from 'axios';
-import './app.css';
+import './App.css';
 import getWeatherDescription from './utils/getWeatherDescription';
 
 type WeatherData = {
@@ -11,7 +12,7 @@ type WeatherData = {
   city: string;
 };
 
-const App: React.FC = () => {
+const App: FC = () => {
   const [city, setCity] = useState<string>('上海');
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -21,31 +22,55 @@ const App: React.FC = () => {
     getCityCoordinates(city);
   }, []);
 
-  // 获取城市经纬度
   const getCityCoordinates = async (cityName: string) => {
     setLoading(true);
+    setError(null);
+    
     try {
-      setError(null);
-      // 使用 Nominatim API 获取城市的经纬度
-      const res = await axios.get(
-        `https://nominatim.openstreetmap.org/search`,
-        {
-          params: {
-            q: cityName,
-            format: 'json',
-          },
-        }
-      );
+      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+        params: {
+          q: cityName,
+          format: 'json',
+        },
+      });
 
-      if (!res.data.length) {
-        setError('未找到该城市');
-        return;
+      if (!response.data.length) {
+        throw new Error('未找到该城市');
       }
-      const { lat, lon } = res.data[0];
-      fetchWeatherData(lat, lon);
+      
+      const { lat, lon } = response.data[0];
+      await fetchWeatherData(lat, lon);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : '发生未知错误');
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWeatherData = async (lat: string, lon: string) => {
+    try {
+      const response = await axios.get('https://api.open-meteo.com/v1/forecast', {
+        params: {
+          latitude: lat,
+          longitude: lon,
+          daily: 'temperature_2m_max,temperature_2m_min,weathercode',
+          timezone: 'auto',
+        },
+      });
+
+      const { daily } = response.data;
+      
+      const formattedData: WeatherData[] = daily.time.map((date: string, index: number) => ({
+        date,
+        maxTemp: daily.temperature_2m_max[index],
+        minTemp: daily.temperature_2m_min[index],
+        weather: getWeatherDescription(daily.weathercode[index]),
+        city,
+      }));
+
+      setWeatherData(formattedData);
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : '获取天气数据时发生错误');
     }
   };
 
@@ -53,39 +78,33 @@ const App: React.FC = () => {
     setCity(e.target.value);
   };
 
-  // 获取天气数据
-  const fetchWeatherData = async (lat: string, lon: string) => {
-    try {
-
-      // 使用经纬度获取天气数据
-      const weatherResponse = await axios.get(
-        `https://api.open-meteo.com/v1/forecast`,
-        {
-          params: {
-            latitude: lat,
-            longitude: lon,
-            daily: 'temperature_2m_max,temperature_2m_min,weathercode',
-            timezone: 'auto',
-          },
-        }
-      );
-
-      const daily = weatherResponse.data.daily;
-      const weatherData: WeatherData[] = daily.time.map((date: string, index: number) => ({
-        date,
-        maxTemp: daily.temperature_2m_max[index],
-        minTemp: daily.temperature_2m_min[index],
-        weather: getWeatherDescription(daily.weathercode[index]),
-        city: city,
-      }));
-
-      setWeatherData(weatherData);
-      setLoading(false);
-    }catch (err) {
-      setError(err instanceof Error ? err.message : '获取天气数据时发生错误');
-      setLoading(false);
+  const renderWeatherCards = () => {
+    if (loading) {
+      return <div className="loading">加载中...</div>;
     }
-  }
+
+    if (error) {
+      return <div className="error">{error}</div>;
+    }
+
+    if (weatherData.length > 0) {
+      return (
+        <div className="weather-cards">
+          {weatherData.map((day) => (
+            <div className="weather-card" key={day.date}>
+              <h2>{day.date}</h2>
+              <p>城市: {day.city}</p>
+              <p>最高温度: {day.maxTemp}°C</p>
+              <p>最低温度: {day.minTemp}°C</p>
+              <p>天气: {day.weather}</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return null;
+  };
   
   return (
     <div className="app-container">
@@ -99,26 +118,7 @@ const App: React.FC = () => {
         />
         <button onClick={() => getCityCoordinates(city)}>获取天气</button>
       </div>
-      {loading && (
-        <div className="loading">加载中...</div>
-      )}
-      {error && !loading ? (
-        <div className="error">{error}</div>
-      ) : (
-        !loading && weatherData.length > 0 && (
-          <div className="weather-cards">
-            {weatherData.map((day) => (
-              <div className="weather-card" key={day.date}>
-                <h2>{day.date}</h2>
-                <p>城市: {day.city}</p>
-                <p>最高温度: {day.maxTemp}°C</p>
-                <p>最低温度: {day.minTemp}°C</p>
-                <p>天气: {day.weather}</p>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+      {renderWeatherCards()}
     </div>
   );
 };
